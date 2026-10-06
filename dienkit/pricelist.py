@@ -192,3 +192,14 @@ def search(items: list[Item], query: str, min_score: float = 0.75) -> tuple[Item
                                   and (best.price is None or it.price < best.price)):
             best, best_score = it, score
     return (best, best_score) if best_score >= min_score else (None, best_score)
+
+
+def find_by_code(items: list[Item], code: str) -> Item | None:
+    """Tim theo MA HANG chinh xac (vd S8VK-C48024): bo qua dau cach/gach nhung khong chap nhan ma gan giong
+    (S8VK-C24024 khac S8VK-C48024) hay co hau to (EX-L221 khac EX-L221-P). Nhieu mat hang trung ma: lay gia thap nhat."""
+    parts = re.findall(r"[A-Z0-9]+", strip_accents(code).upper())
+    if not parts:
+        return None
+    pat = re.compile(r"(?<![A-Z0-9])" + r"[^A-Z0-9]*".join(map(re.escape, parts)) + r"(?![A-Z0-9]|[-/][A-Z0-9])")  # EX-L221 khong khop EX-L221-P
+    hits = [it for it in items if pat.search(strip_accents(it.text).upper())]
+    return min(hits, key=lambda it: it.price if it.price is not None else float("inf"), default=None)

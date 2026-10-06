@@ -5,7 +5,7 @@ from pathlib import Path
 
 import ezdxf
 
-from dienkit.iodraw import IOPoint, build_dxf, check_polarity, paginate, read_io
+from dienkit.iodraw import IOPoint, TitleInfo, build_dxf, check_polarity, paginate, read_io
 
 EX = Path(__file__).parent.parent / "examples"
 
@@ -42,7 +42,7 @@ class IODrawTests(unittest.TestCase):
 
     def test_example_drawing(self):
         pts = read_io(EX / "io_list.csv")
-        doc, n = build_dxf(pts, "Test", "QA")
+        doc, n = build_dxf(pts, TitleInfo("Test", "TPV00", "QA"), di_mode="pnp", do_mode="source")
         self.assertEqual(n, 5)  # DI 16 + DI 2 (module khac) + AI + DO + AO
         with tempfile.TemporaryDirectory() as d:
             out = Path(d, "io.dxf")
@@ -66,6 +66,28 @@ class IODrawTests(unittest.TestCase):
         doc, _ = build_dxf(pts, di_mode="npn", do_mode="sink")
         t = texts(doc)
         # npn: bus thiet bi 0V, COM +24V; sink: tai lay +24V, COM 0V
+        self.assertEqual(t.count("+24VDC"), 2)
+        self.assertEqual(t.count("0VDC"), 2)
+
+
+    def test_symbol_from_description_respects_kind(self):
+        self.assertEqual(IOPoint("Y34", "DO", desc="U1 VACUUM INPUT 1").symbol, "VALVE")
+        self.assertEqual(IOPoint("Y40", "DO", desc="U1 INPUT 1 CYL UP").symbol, "VALVE")
+        self.assertEqual(IOPoint("X50", "DI", desc="U1 INPUT1 CYL UP").symbol, "NO")  # cong tac tu, khong phai van
+        self.assertEqual(IOPoint("X1", "DI", desc="EMG STOP PB").symbol, "NC")
+        self.assertEqual(IOPoint("Y64", "DO", desc="TOWER LAMP RED").symbol, "LAMP")
+        self.assertEqual(IOPoint("X44", "DI", desc="PRESSURE SENSOR INPUT 1").symbol, "SENSOR")
+        # cot thiet_bi luon uu tien hon mo ta
+        self.assertEqual(IOPoint("Y0", "DO", desc="READY LAMP", device="role").symbol, "COIL")
+
+    def test_designation_sheet_codes_and_default_sink(self):
+        pts = [IOPoint("X0", "DI", tag="PB", designation="PBRD"), IOPoint("Y0", "DO", tag="L")]
+        doc, n = build_dxf(pts, TitleInfo("May", "TPV25A01", "HX"))
+        t = texts(doc)
+        self.assertIn("PBRD", t)
+        self.assertIn("DRAWING CODE: TPV25A01-E300", t)
+        self.assertIn("DRAWING CODE: TPV25A01-E400", t)
+        # sink: dau vao S/S (COM) noi +24V, thiet bi dong 0V; dau ra COM 0V, tai lay +24V
         self.assertEqual(t.count("+24VDC"), 2)
         self.assertEqual(t.count("0VDC"), 2)
 

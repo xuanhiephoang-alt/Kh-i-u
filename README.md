@@ -36,7 +36,8 @@ Cột: `ten,kw,pha,dien_ap,cosphi,hieu_suat,chieu_dai_m,kd,dong_co,so_loi` (xem 
 # Sinh bản vẽ đấu nối I/O PLC (DXF + PDF)
 
 ```bash
-python -m dienkit.iodraw examples/io_list.csv -o io.dxf --pdf io.pdf --project "Tên công trình" --drawer "Tên"
+python -m dienkit.iodraw examples/io_list.csv -o io.dxf --pdf io.pdf \
+    --project "CHECKING MACHINE" --code TPV25A01 --designer HIEP.HX
 ```
 Mở `io.dxf` bằng AutoCAD / ZWCAD / LibreCAD; PDF để in hoặc gửi khách hàng. Xem mẫu: `examples/io_mau.pdf`.
 
@@ -49,13 +50,22 @@ Mở `io.dxf` bằng AutoCAD / ZWCAD / LibreCAD; PDF để in hoặc gửi khác
 | `thiet_bi` | | chọn ký hiệu: nút nhấn/NO, NC/nút dừng/E-stop, cảm biến, đèn, rơ le/contactor, van, 4-20mA |
 | `dau_day` | | số domino; để trống thì tự đánh XT1 (DI), XT2 (AI), XT3 (DO), XT4 (AO) |
 | `module` | | tên module; đổi module sẽ sang tờ mới |
+| `ky_hieu` | | ký hiệu thiết bị trên bản vẽ (SS2, LS1, SV0…), vẽ phía trên ký hiệu thay cho tên tag |
+
+Nếu cột `thiet_bi` để trống, ký hiệu được đoán từ mô tả theo loại điểm. Ví dụ "CYL"/"VACUUM" ở đầu ra → van,
+"LAMP" → đèn, "STOP"/"EMG" ở đầu vào → tiếp điểm NC. Còn "CYL UP" ở đầu vào vẫn vẽ là công tắc.
+
+Khung tên có PROJECT CODE / PROJECT NAME / DRAWING NAME / DRAWING CODE / DESIGNER. Mã tờ đánh theo kiểu
+`TPV25A01-E300`: DI bắt đầu từ E300, DO từ E400 (đổi bằng `--so-to-di`, `--so-to-do`). Viền có lưới vùng 0–9 / A–F.
 
 Mỗi tờ A3 có tối đa 16 điểm và khung tên. Các tờ đặt cạnh nhau trong model space, cách nhau 450 mm.
 Layer: `WIRE`, `SYMBOL`, `TERMINAL`, `PLC`, `TEXT`, `FRAME`. Ký hiệu là block, nên có thể sửa một lần cho toàn bộ bản vẽ.
 
 ## Chiều nguồn — chọn theo đúng model PLC
-- `--di pnp` (mặc định): thiết bị lấy +24V, chân COM/S/S nối 0V. Dùng `--di npn` khi chân S/S nối +24V.
-- `--do source` (mặc định, ví dụ FX5U-…MT/ESS): COM +24V, tải về 0V. Dùng `--do sink` cho FX5U-…MT/ES.
+Mặc định theo cách đấu của dự án TPV25A01 (FX5U-80MT/ES, cảm biến NPN):
+- `--di npn` (mặc định): chân S/S nối +24V, thiết bị đóng về 0V. Dùng `--di pnp` khi S/S nối 0V (cảm biến PNP).
+- `--do sink` (mặc định, ví dụ FX5U-…MT/ES): COM nối 0V, tải lấy +24V. Dùng `--do source` cho FX5U-…MT/ESS.
+- Đầu vào của module Mitsubishi FX5 ghi chân chung là `S/S`; các module khác ghi `COM`.
 - Nếu cột `thiet_bi` ghi PNP/NPN ngược với kiểu đã chọn, chương trình in CẢNH BÁO.
 
 ## Giới hạn
@@ -115,3 +125,36 @@ Cột, dấu phân cách và encoding của file import **thay đổi theo phiê
    Tên cột được nhận ra bằng tiếng Anh, tiếng Nhật hoặc tiếng Việt.
 
 Tag dạng bit của word (`D30.0`): sau khi import vào EasyBuilder, kiểm tra lại cách phần mềm hiểu địa chỉ.
+
+---
+
+# Đọc project GX Works3 (.gx3) — chú thích, tham chiếu chéo, so với bản vẽ
+
+```bash
+python -m dienkit.gx3 CHECKING_MC.gx3 --ban-ve TPV25A01_CHECKING_MACHINE.pdf -o gx3_out --plc PLC1
+```
+Chỉ **đọc** file `.gx3`, không sửa. Kết quả ghi vào thư mục `gx3_out/`:
+| file | nội dung |
+|---|---|
+| `io_tu_plc.csv` | X/Y kèm chú thích và module (theo model trong project). Đưa thẳng vào `dienkit.iodraw` để vẽ |
+| `tags_tu_plc.csv` | mọi thiết bị có chú thích (bỏ SM/SD hệ thống), tên tag lấy từ chú thích. Đưa vào `dienkit.tags` → Weintek |
+| `bao_cao_gx3.xlsx` | sheet **So voi ban ve**: chú thích trong chương trình so với bản vẽ PDF; **Tham chieu**: thiết bị dùng trong ladder mà chưa có chú thích, hoặc có chú thích mà ladder không dùng |
+
+Mức độ so sánh: `DAO_CHO` (hai địa chỉ bị đảo nhau), `NGUOC_NGHIA` (OPEN/CLOSE, UP/DOWN, OK/NG…),
+`KHAC`, `THIEU_BAN_VE`, `THIEU_CHU_THICH`, `GAN_GIONG` (chỉ khác cách viết), `KHOP`.
+
+⚠️ `.gx3` là định dạng nội bộ của Mitsubishi, không có tài liệu công khai. Cách đọc ở đây được suy ra từ một project
+FX5U thật (GX Works3) và có thể sai với phiên bản hoặc dòng CPU khác. Luôn đối chiếu lại trong GX Works3.
+Project EasyBuilder (`.emtp`) bị nén/mã hóa nên không đọc được: hãy Export Address Tag Library ra CSV.
+
+# Đọc bản vẽ PDF — danh sách I/O và BOM nháp
+
+```bash
+python -m dienkit.pdfio ban_ve.pdf --io io_ban_ve.csv --models bom_nhap.xlsx -p bang_gia.xlsx
+```
+- `--io`: lấy địa chỉ X/Y và mô tả nằm cạnh nhau trong bản vẽ (mô tả 2 dòng được ghép lại), kèm mã tờ (E300…).
+- `--models`: lấy các mã thiết bị ghi trong ngoặc, ví dụ `(S8VK-C48024)`. Nếu có `-p bang_gia`, giá được tra theo
+  **mã chính xác**: `S8VK-C24024` không khớp `S8VK-C48024`, `EX-L221` không khớp `EX-L221-P`.
+  Cột SL để trống, vì **số lần xuất hiện trên bản vẽ không phải số lượng mua**. Mã không ghi trong ngoặc
+  (ví dụ MT8072IP, GW1P-1EQM3W) sẽ không được lấy.
+- Chỉ đọc PDF xuất từ CAD (có lớp chữ). Bản scan dạng ảnh thì không đọc được.

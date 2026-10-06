@@ -78,3 +78,15 @@ class PriceTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FindByCodeTests(unittest.TestCase):
+    def test_exact_code_only(self):
+        from dienkit.pricelist import find_by_code
+        items = [Item("", "Nguon Omron S8VK-C24024 240W", "cai", 2100000),
+                 Item("", "Nguon Omron S8VK-C48024 480W", "cai", 3900000),
+                 Item("", "Cam bien EX-L221-P (PNP)", "cai", 900000),
+                 Item("", "Cam bien Panasonic EX L221", "cai", 850000)]
+        self.assertEqual(find_by_code(items, "S8VK-C48024").price, 3900000)
+        self.assertEqual(find_by_code(items, "EX-L221").price, 850000)  # khong lay ban -P
+        self.assertIsNone(find_by_code(items, "S8VK-C96024"))
