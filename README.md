@@ -55,6 +55,16 @@ Mở `io.dxf` bằng AutoCAD / ZWCAD / LibreCAD; PDF để in hoặc gửi khác
 Nếu cột `thiet_bi` để trống, ký hiệu được đoán từ mô tả theo loại điểm. Ví dụ "CYL"/"VACUUM" ở đầu ra → van,
 "LAMP" → đèn, "STOP"/"EMG" ở đầu vào → tiếp điểm NC. Còn "CYL UP" ở đầu vào vẫn vẽ là công tắc.
 
+Tùy chọn bố cục:
+- `--hai-cot`: 2 cột × 16 điểm mỗi tờ (32 điểm/tờ), mỗi cột chỉ một module, giống bộ bản vẽ TPV25A01
+  (E300 = X0–X37, E301 = X40–X47 | X50–X67).
+- `--khong-domino`: thiết bị nối thẳng vào PLC, không vẽ domino.
+- `--en`: tên tờ tiếng Anh, ví dụ `E300_PLC INPUT CIRCUIT`.
+- Cột `thiet_bi` = `tín hiệu`: điểm nối sang I/O của thiết bị khác (driver, camera…), vẽ mũi tên và ghi `ky_hieu`
+  (AMC1, CAM) thay vì cuộn dây.
+
+PDF xuất ra có chữ thật (tìm kiếm được), nên đưa ngược vào `dienkit.gx3 --ban-ve` để kiểm tra lại được.
+
 Khung tên có PROJECT CODE / PROJECT NAME / DRAWING NAME / DRAWING CODE / DESIGNER. Mã tờ đánh theo kiểu
 `TPV25A01-E300`: DI bắt đầu từ E300, DO từ E400 (đổi bằng `--so-to-di`, `--so-to-do`). Viền có lưới vùng 0–9 / A–F.
 
@@ -71,7 +81,8 @@ Mặc định theo cách đấu của dự án TPV25A01 (FX5U-80MT/ES, cảm bi�
 ## Giới hạn
 - Đây là sơ đồ đấu nối dạng "một dòng cho một điểm". Cảm biến 3 dây và AI 4 dây chỉ vẽ dây tín hiệu,
   chưa vẽ dây nguồn và dây 0V riêng của từng thiết bị.
-- Chưa vẽ: mạch động lực, cầu chì/nguồn 24V, đầu ra relay có nhiều COM riêng, sơ đồ module truyền thông.
+- Chưa vẽ: mạch động lực, cầu chì/nguồn 24V, sơ đồ module truyền thông.
+- Mỗi module vẽ một chân COM. Module có nhiều COM (ví dụ FX5U-80MT/ES có COM0…COM6) cần ghi lại đúng nhóm trên CAD.
 - Ký hiệu đơn giản hóa theo kiểu IEC. Kiểm tra lại theo tiêu chuẩn bản vẽ của công ty trước khi phát hành.
 
 ---

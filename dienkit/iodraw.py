@@ -35,11 +35,15 @@ TXT = 2.5    # chieu cao chu thuong
 TYPE_ORDER = ["DI", "AI", "DO", "AO"]
 TYPE_TITLE = {"DI": "ĐẦU VÀO SỐ (DI)", "AI": "ĐẦU VÀO TƯƠNG TỰ (AI)",
               "DO": "ĐẦU RA SỐ (DO)", "AO": "ĐẦU RA TƯƠNG TỰ (AO)"}
+TYPE_TITLE_EN = {"DI": "PLC INPUT CIRCUIT", "AI": "PLC ANALOG INPUT CIRCUIT",
+                 "DO": "PLC OUTPUT CIRCUIT", "AO": "PLC ANALOG OUTPUT CIRCUIT"}
 TERMINAL_STRIP = {"DI": "XT1", "AI": "XT2", "DO": "XT3", "AO": "XT4"}
 DEFAULT_SYMBOL = {"DI": "NO", "AI": "TX", "DO": "COIL", "AO": "TX"}
 
 # tu khoa (khong dau) -> ky hieu
 SYMBOL_KEYWORDS = [
+    # noi sang dau vao/ra cua thiet bi khac (driver, camera...): chi ghi o cot thiet_bi
+    ("SIG", ["tin hieu", "signal", "sig"]),
     ("NC", ["nc", "thuong dong", "dung", "stop", "estop", "e-stop", "khan"]),
     ("SENSOR", ["cam bien", "sensor", "pnp", "npn", "prox", "quang", "tiem can"]),
     ("LAMP", ["den", "lamp", "hl", "bao"]),
@@ -121,16 +125,40 @@ def read_io(path: str | Path) -> list[IOPoint]:
     return pts
 
 
+def _number_terminals(group: list[IOPoint], kind: str) -> None:
+    n = 0
+    for p in group:
+        if not p.terminal:
+            n += 1
+            p.terminal = f"{TERMINAL_STRIP[kind]}:{n}"
+
+
+def _columns(points: list[IOPoint], kind: str, per_col: int, terminals: bool):
+    group = [p for p in points if p.kind == kind]
+    if terminals:
+        _number_terminals(group, kind)
+    modules: dict[str, list[IOPoint]] = {}
+    for p in group:
+        modules.setdefault(p.module, []).append(p)
+    return [(mod, pts[i:i + per_col]) for mod, pts in modules.items() for i in range(0, len(pts), per_col)]
+
+
+def paginate_columns(points: list[IOPoint], cols: int = 2, per_col: int = ROWS_PER_PAGE,
+                     terminals: bool = True) -> list[tuple[str, list[tuple[str, list[IOPoint]]]]]:
+    """Bo cuc nhieu cot: [(loai, [(module, diem), ...toi da `cols` cot])]. Moi cot chi 1 module."""
+    pages = []
+    for kind in TYPE_ORDER:
+        columns = _columns(points, kind, per_col, terminals)
+        pages += [(kind, columns[i:i + cols]) for i in range(0, len(columns), cols)]
+    return pages
+
+
 def paginate(points: list[IOPoint]) -> list[tuple[str, str, list[IOPoint]]]:
     """Nhom theo loai -> module -> toi da 16 diem. Tu danh so domino neu bo trong."""
     pages = []
     for kind in TYPE_ORDER:
         group = [p for p in points if p.kind == kind]
-        n = 0
-        for p in group:
-            if not p.terminal:
-                n += 1
-                p.terminal = f"{TERMINAL_STRIP[kind]}:{n}"
+        _number_terminals(group, kind)
         modules: dict[str, list[IOPoint]] = {}
         for p in group:
             modules.setdefault(p.module, []).append(p)
@@ -173,6 +201,11 @@ def _define_blocks(doc) -> None:
     b.add_line((0, 0), (5, 0)); b.add_circle((10, 0), 5); b.add_line((15, 0), (20, 0))
     b.add_text("mA", height=2.2).set_placement((10, 0), align=TextEntityAlignment.MIDDLE_CENTER)
 
+    # SIG: noi sang thiet bi khac (mui ten), nhan = ky hieu thiet bi do (AMC1, CAM...)
+    b = doc.blocks.new("SIG")
+    b.add_line((0, 0), (20, 0))
+    b.add_lwpolyline([(7, -2), (12, 0), (7, 2)], close=True)
+
     b = doc.blocks.new("TERM")
     b.add_circle((0, 0), 1.2)
 
@@ -208,6 +241,7 @@ class TitleInfo:
     code: str = ""           # ma du an (PROJECT CODE), vd TPV25A01
     designer: str = ""
     sheet_base: dict = None  # so to bat dau theo loai, vd {"DI": 300, "DO": 400}
+    lang: str = "vi"         # "en": ten to kieu "E300_PLC INPUT CIRCUIT"
 
     def __post_init__(self):
         self.sheet_base = {"DI": 300, "AI": 500, "DO": 400, "AO": 600, **(self.sheet_base or {})}
@@ -307,6 +341,69 @@ def _text_cols(pg: Page, pts: list[IOPoint], x: float, y_of) -> None:
         pg.text(pt.desc, x_desc, y, 2.5, TextEntityAlignment.MIDDLE_LEFT)
 
 
+COL_W = 195  # bo cuc 2 cot: moi cot rong 195 mm, cot 1 bat dau x=18, cot 2 x=213
+
+
+def _col_input(pg: Page, cx: float, kind: str, module: str, pts: list[IOPoint], bus: str, com: str,
+               terminals: bool) -> None:
+    """Cot dau vao gon: bus | thiet bi | (domino) | module | mo ta."""
+    rows = [Y_TOP - i * ROW_PITCH for i in range(len(pts))]
+    y_com = rows[-1] - ROW_PITCH
+    bus_x, sym_x, term_x, m1, m2 = cx + 6, cx + 30, cx + 92, cx + 112, cx + 131
+    pg.line((bus_x, rows[0] + 8), (bus_x, rows[-1]))
+    pg.text(bus, bus_x, rows[0] + 10, 2.2, TextEntityAlignment.BOTTOM_CENTER)
+    pg.rect(m1, y_com - 6, m2, rows[0] + 7, "PLC")
+    pg.text(module or "PLC", (m1 + m2) / 2, rows[0] + 9, 2.2, TextEntityAlignment.BOTTOM_CENTER)
+    for y, pt in zip(rows, pts):
+        pg.line((bus_x, y), (sym_x, y))
+        pg.insert(pt.symbol, sym_x, y)
+        pg.text(pt.label, sym_x + 10, y + 5, 2.0, TextEntityAlignment.BOTTOM_CENTER)
+        if terminals:
+            pg.line((sym_x + 20, y), (term_x - 1.2, y))
+            pg.insert("TERM", term_x, y, "TERMINAL")
+            pg.text(pt.terminal, term_x, y + 2, 1.8, TextEntityAlignment.BOTTOM_CENTER)
+            pg.line((term_x + 1.2, y), (m1, y))
+        else:
+            pg.line((sym_x + 20, y), (m1, y))
+        pg.text(pt.address, (sym_x + 20 + (term_x if terminals else m1)) / 2, y + 0.8, 1.8,
+                TextEntityAlignment.BOTTOM_CENTER)
+        pg.text(pt.address, m1 + 1.5, y, 2.2, TextEntityAlignment.MIDDLE_LEFT, "PLC")
+        pg.text(pt.desc, m2 + 3, y, 2.2, TextEntityAlignment.MIDDLE_LEFT)
+    pg.text(_com_pin(kind, module), m1 + 1.5, y_com, 2.2, TextEntityAlignment.MIDDLE_LEFT, "PLC")
+    pg.line((m1, y_com), (m1 - 20, y_com))
+    pg.text(com, m1 - 22, y_com, 2.2, TextEntityAlignment.MIDDLE_RIGHT)
+
+
+def _col_output(pg: Page, cx: float, kind: str, module: str, pts: list[IOPoint], bus: str, com: str,
+                terminals: bool) -> None:
+    """Cot dau ra gon: mo ta | module | (domino) | tai | bus."""
+    rows = [Y_TOP - i * ROW_PITCH for i in range(len(pts))]
+    y_com = rows[-1] - ROW_PITCH
+    m1, m2, term_x, sym_x, bus_x = cx + 50, cx + 69, cx + 98, cx + 128, cx + 178
+    pg.rect(m1, y_com - 6, m2, rows[0] + 7, "PLC")
+    pg.text(module or "PLC", (m1 + m2) / 2, rows[0] + 9, 2.2, TextEntityAlignment.BOTTOM_CENTER)
+    pg.line((bus_x, rows[0] + 8), (bus_x, rows[-1]))
+    pg.text(bus, bus_x, rows[0] + 10, 2.2, TextEntityAlignment.BOTTOM_CENTER)
+    for y, pt in zip(rows, pts):
+        pg.text(pt.desc, m1 - 2, y, 2.2, TextEntityAlignment.MIDDLE_RIGHT)
+        pg.text(pt.address, m2 - 1.5, y, 2.2, TextEntityAlignment.MIDDLE_RIGHT, "PLC")
+        if terminals:
+            pg.line((m2, y), (term_x - 1.2, y))
+            pg.insert("TERM", term_x, y, "TERMINAL")
+            pg.text(pt.terminal, term_x, y + 2, 1.8, TextEntityAlignment.BOTTOM_CENTER)
+            pg.line((term_x + 1.2, y), (sym_x, y))
+        else:
+            pg.line((m2, y), (sym_x, y))
+        pg.text(pt.address, (m2 + (term_x if terminals else sym_x)) / 2, y + 0.8, 1.8,
+                TextEntityAlignment.BOTTOM_CENTER)
+        pg.insert(pt.symbol, sym_x, y)
+        pg.text(pt.label, sym_x + 10, y + 5, 2.0, TextEntityAlignment.BOTTOM_CENTER)
+        pg.line((sym_x + 20, y), (bus_x, y))
+    pg.text(_com_pin(kind, module), m2 - 1.5, y_com, 2.2, TextEntityAlignment.MIDDLE_RIGHT, "PLC")
+    pg.line((m2, y_com), (m2 + 20, y_com))
+    pg.text(com, m2 + 22, y_com, 2.2, TextEntityAlignment.MIDDLE_LEFT)
+
+
 def _com_pin(kind: str, module: str) -> str:
     # Mitsubishi FX5: chan chung dau vao ghi la S/S
     return "S/S" if kind == "DI" and module.upper().startswith("FX5") else "COM"
@@ -333,10 +430,23 @@ def check_polarity(points: list[IOPoint], di_mode: str = "npn") -> list[str]:
             for p in points if p.kind == "DI" and other in norm(p.device).split()]
 
 
+def _modes(kind: str, di_mode: str, do_mode: str) -> tuple[str, str]:
+    if kind in ("DI", "AI"):
+        return INPUT_MODES[di_mode] if kind == "DI" else INPUT_MODES["pnp"]  # AI 2 day luon lay +24V
+    return OUTPUT_MODES[do_mode] if kind == "DO" else OUTPUT_MODES["source"]
+
+
+def _sheet_name(info: "TitleInfo", kind: str, num: str, first: str, last: str) -> str:
+    return f"{num}_{TYPE_TITLE_EN[kind]}" if info.lang == "en" else f"{num}_{TYPE_TITLE[kind]} {first}-{last}"
+
+
 def build_dxf(points: list[IOPoint], info: TitleInfo | None = None,
-              di_mode: str = "npn", do_mode: str = "sink"):
-    """Mac dinh sink/sink nhu FX5U-..MT/ES: dau vao S/S noi +24V (thiet bi dong 0V), tai lay +24V, COM ve 0V."""
+              di_mode: str = "npn", do_mode: str = "sink", columns: int = 1, terminals: bool = True):
+    """Mac dinh sink/sink nhu FX5U-..MT/ES: dau vao S/S noi +24V (thiet bi dong 0V), tai lay +24V, COM ve 0V.
+    columns=2: 2 cot x 16 diem moi to (nhu ban ve TPV25A01). terminals=False: thiet bi noi thang vao PLC."""
     info = info or TitleInfo()
+    if columns == 2:
+        return _build_2col(points, info, di_mode, do_mode, terminals)
     doc = ezdxf.new("R2010", setup=True, units=4)  # 4 = mm
     doc.styles.add("VN", font="arial.ttf")
     for name, color in [("FRAME", 7), ("WIRE", 1), ("SYMBOL", 3), ("TEXT", 7), ("TERMINAL", 5), ("PLC", 4)]:
@@ -351,7 +461,7 @@ def build_dxf(points: list[IOPoint], info: TitleInfo | None = None,
         num = f"E{info.sheet_base[kind] + seq[kind]}"
         seq[kind] += 1
         code = f"{info.code}-{num}" if info.code else num
-        _frame(pg, f"{num}_{TYPE_TITLE[kind]} {first}-{last}", code, i + 1, len(pages), info)
+        _frame(pg, _sheet_name(info, kind, num, first, last), code, i + 1, len(pages), info)
         if kind in ("DI", "AI"):
             # AI 2 day 4-20mA luon lay nguon +24V
             bus, com = INPUT_MODES[di_mode] if kind == "DI" else INPUT_MODES["pnp"]
@@ -362,6 +472,45 @@ def build_dxf(points: list[IOPoint], info: TitleInfo | None = None,
     return doc, len(pages)
 
 
+def _new_doc():
+    doc = ezdxf.new("R2010", setup=True, units=4)  # 4 = mm
+    doc.styles.add("VN", font="arial.ttf")
+    for name, color in [("FRAME", 7), ("WIRE", 1), ("SYMBOL", 3), ("TEXT", 7), ("TERMINAL", 5), ("PLC", 4)]:
+        doc.layers.add(name, color=color)
+    _define_blocks(doc)
+    return doc
+
+
+def _build_2col(points, info, di_mode, do_mode, terminals):
+    doc = _new_doc()
+    msp = doc.modelspace()
+    pages = paginate_columns(points, 2, ROWS_PER_PAGE, terminals)
+    seq = {k: 0 for k in TYPE_ORDER}
+    for i, (kind, cols) in enumerate(pages):
+        pg = Page(msp, i)
+        num = f"E{info.sheet_base[kind] + seq[kind]}"
+        seq[kind] += 1
+        first, last = cols[0][1][0].address, cols[-1][1][-1].address
+        _frame(pg, _sheet_name(info, kind, num, first, last), f"{info.code}-{num}" if info.code else num,
+               i + 1, len(pages), info)
+        bus, com = _modes(kind, di_mode, do_mode)
+        draw = _col_input if kind in ("DI", "AI") else _col_output
+        for c, (module, pts) in enumerate(cols):
+            draw(pg, 18 + c * COL_W, kind, module, pts, bus, com, terminals)
+        if terminals:
+            _legend(pg)
+    return doc, len(pages)
+
+
+_MPL_ALIGN = {
+    TextEntityAlignment.LEFT: ("left", "baseline"),
+    TextEntityAlignment.BOTTOM_CENTER: ("center", "bottom"),
+    TextEntityAlignment.MIDDLE_LEFT: ("left", "center"),
+    TextEntityAlignment.MIDDLE_RIGHT: ("right", "center"),
+    TextEntityAlignment.MIDDLE_CENTER: ("center", "center"),
+}
+
+
 def export_pdf(doc, n_pages: int, path: str | Path) -> None:
     """Moi trang DXF -> 1 trang PDF A3 (can matplotlib)."""
     import matplotlib
@@ -369,15 +518,31 @@ def export_pdf(doc, n_pages: int, path: str | Path) -> None:
     import matplotlib.pyplot as plt
     from matplotlib.backends.backend_pdf import PdfPages
     from ezdxf.addons.drawing import Frontend, RenderContext
-    from ezdxf.addons.drawing.config import BackgroundPolicy, ColorPolicy, Configuration
+    from ezdxf.addons.drawing.config import BackgroundPolicy, ColorPolicy, Configuration, TextPolicy
     from ezdxf.addons.drawing.matplotlib import MatplotlibBackend
 
-    cfg = Configuration(background_policy=BackgroundPolicy.WHITE, color_policy=ColorPolicy.BLACK)
+    # Duong net ve bang ezdxf; chu ve lai bang chu that cua matplotlib de PDF tim kiem/doc lai duoc
+    # (ezdxf bien chu thanh duong cong, PDF se khong co lop chu).
+    cfg = Configuration(background_policy=BackgroundPolicy.WHITE, color_policy=ColorPolicy.BLACK,
+                        text_policy=TextPolicy.IGNORE)
+    msp = doc.modelspace()
+    texts = list(msp.query("TEXT"))
+    for ins in msp.query("INSERT"):
+        texts += [e for e in ins.virtual_entities() if e.dxftype() == "TEXT"]
     with PdfPages(path) as pdf:
         for i in range(n_pages):
             fig = plt.figure(figsize=(16.54, 11.69))  # A3 inch
             ax = fig.add_axes([0, 0, 1, 1])
-            Frontend(RenderContext(doc), MatplotlibBackend(ax, adjust_figure=False), config=cfg).draw_layout(doc.modelspace())
+            Frontend(RenderContext(doc), MatplotlibBackend(ax, adjust_figure=False), config=cfg).draw_layout(msp)
+            x0 = i * PAGE_GAP
+            for t in texts:
+                align, p1, _ = t.get_placement()
+                if not x0 - 5 <= p1.x <= x0 + PAGE_W + 5:
+                    continue
+                ha, va = _MPL_ALIGN.get(align, ("left", "baseline"))
+                # 1 mm = 72/25.4 pt; chieu cao chu hoa ~0.72 co chu
+                ax.text(p1.x, p1.y, t.dxf.text, fontsize=t.dxf.height * 72 / 25.4 / 0.72, ha=ha, va=va,
+                        family="DejaVu Sans", color="black")
             ax.set_xlim(i * PAGE_GAP, i * PAGE_GAP + PAGE_W)
             ax.set_ylim(0, PAGE_H)
             ax.set_aspect("equal", adjustable="box")
@@ -396,17 +561,20 @@ def main(argv=None) -> int:
     ap.add_argument("--designer", "--drawer", default="", help="Nguoi thiet ke")
     ap.add_argument("--so-to-di", type=int, default=300, help="So to dau tien cua DI (mac dinh E300)")
     ap.add_argument("--so-to-do", type=int, default=400, help="So to dau tien cua DO (mac dinh E400)")
+    ap.add_argument("--hai-cot", action="store_true", help="2 cot x 16 diem moi to (32 diem/to)")
+    ap.add_argument("--khong-domino", action="store_true", help="Thiet bi noi thang vao PLC, khong ve domino")
+    ap.add_argument("--en", action="store_true", help="Ten to tieng Anh: E300_PLC INPUT CIRCUIT")
     ap.add_argument("--di", default="npn", choices=list(INPUT_MODES),
                     help="Dau vao: npn = sink, S/S noi +24V (mac dinh) | pnp = source, S/S noi 0V")
     ap.add_argument("--do", default="sink", choices=list(OUTPUT_MODES),
                     help="Dau ra transistor: sink = COM noi 0V, vd FX5U-..MT/ES (mac dinh) | source = ../ESS")
     a = ap.parse_args(argv)
-    info = TitleInfo(a.project, a.code, a.designer, {"DI": a.so_to_di, "DO": a.so_to_do})
+    info = TitleInfo(a.project, a.code, a.designer, {"DI": a.so_to_di, "DO": a.so_to_do}, "en" if a.en else "vi")
 
     pts = read_io(a.io)
     for w in check_polarity(pts, a.di):
         print("CANH BAO:", w)
-    doc, n = build_dxf(pts, info, a.di, a.do)
+    doc, n = build_dxf(pts, info, a.di, a.do, 2 if a.hai_cot else 1, not a.khong_domino)
     doc.saveas(a.out)
     counts = {k: sum(p.kind == k for p in pts) for k in TYPE_ORDER}
     print(f"Da ghi {a.out}: {n} to, " + ", ".join(f"{k}={v}" for k, v in counts.items() if v))

@@ -15,7 +15,8 @@ from pathlib import Path
 ADDR = re.compile(r"^[XY][0-7]+$")
 # nhan khong phai mo ta: tham chieu cheo (E031-A3), bus nguon, so domino
 NOT_DESC = re.compile(r"^\(?E\d{3}-[A-F]\d\)?$|^[PN]24[A-Z]?$|^(TB|XT)\d")
-DRAWING_CODE = re.compile(r"^[A-Z0-9]+-([A-Z]\d{3})$")
+# ma to o cuoi cum chu: "TPV25A01-E300" hoac "DRAWING CODE: TPV25A01-E300"
+DRAWING_CODE = re.compile(r"(?:^|\s)[A-Z0-9]+-([A-Z]\d{3})$")
 # ma thiet bi: co ca chu va so, khong phai tham chieu cheo
 MODEL = re.compile(r"\(([A-Z0-9][A-Za-z0-9\-/ .]{3,50})\)")
 CROSS_REF = re.compile(r"^E\d{3}-[A-F]\d$")
@@ -40,7 +41,7 @@ def extract_io(path: str | Path) -> dict[str, DrawingIO]:
     with pdfplumber.open(path) as pdf:
         for n, page in enumerate(pdf.pages, 1):
             ws = [w for w in page.extract_words(keep_blank_chars=True, x_tolerance=1.5) if w["upright"]]
-            sheet = next((m.group(1) for w in ws if (m := DRAWING_CODE.match(w["text"].strip()))), "")
+            sheet = next((m.group(1) for w in ws if (m := DRAWING_CODE.search(w["text"].strip()))), "")
             for a in ws:
                 addr = a["text"].strip()
                 if not ADDR.match(addr):

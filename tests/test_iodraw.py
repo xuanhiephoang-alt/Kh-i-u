@@ -5,7 +5,7 @@ from pathlib import Path
 
 import ezdxf
 
-from dienkit.iodraw import IOPoint, TitleInfo, build_dxf, check_polarity, paginate, read_io
+from dienkit.iodraw import IOPoint, TitleInfo, build_dxf, check_polarity, paginate, paginate_columns, read_io
 
 EX = Path(__file__).parent.parent / "examples"
 
@@ -90,6 +90,40 @@ class IODrawTests(unittest.TestCase):
         # sink: dau vao S/S (COM) noi +24V, thiet bi dong 0V; dau ra COM 0V, tai lay +24V
         self.assertEqual(t.count("+24VDC"), 2)
         self.assertEqual(t.count("0VDC"), 2)
+
+    def test_two_columns_like_tpv25a01(self):
+        # CPU 40 vao (X0-X47) + mo rong 16 (X50-X67): E300 = X0-X37, E301 = X40-X47 | X50-X67
+        pts = [IOPoint(f"X{n:o}", "DI", module="FX5U-80MT/ES") for n in range(40)] + \
+              [IOPoint(f"X{n:o}", "DI", module="FX5-32ER/ES") for n in range(0o50, 0o70)] + \
+              [IOPoint("Y0", "DO", desc="START SIGNAL", device="tín hiệu", designation="AMC1", module="FX5U-80MT/ES")]
+        pages = paginate_columns(pts, terminals=False)
+        self.assertEqual([[(m, p[0].address, p[-1].address) for m, p in cols] for _, cols in pages], [
+            [("FX5U-80MT/ES", "X0", "X17"), ("FX5U-80MT/ES", "X20", "X37")],
+            [("FX5U-80MT/ES", "X40", "X47"), ("FX5-32ER/ES", "X50", "X67")],
+            [("FX5U-80MT/ES", "Y0", "Y0")]])
+        self.assertEqual(pts[0].terminal, "")  # khong domino
+        doc, n = build_dxf(pts, TitleInfo("M", "TPV25A01", lang="en"), columns=2, terminals=False)
+        self.assertEqual(n, 3)
+        t = texts(doc)
+        self.assertIn("DRAWING NAME: E301_PLC INPUT CIRCUIT", t)
+        self.assertIn("DRAWING CODE: TPV25A01-E400", t)
+        self.assertEqual(t.count("S/S"), 4)  # moi cot dau vao FX5 co chan S/S
+        self.assertNotIn("TERM", [e.dxf.name for e in doc.modelspace().query("INSERT")])
+        self.assertIn("SIG", [e.dxf.name for e in doc.modelspace().query("INSERT")])
+
+    def test_pdf_has_real_text_readable_by_pdfio(self):
+        from dienkit.iodraw import export_pdf
+        from dienkit.pdfio import extract_io
+        pts = [IOPoint("X0", "DI", desc="READY ON", module="FX5U-80MT/ES"),
+               IOPoint("Y6", "DO", desc="END OF LINEAR CLOSE", designation="SV1", device="van", module="FX5U-80MT/ES")]
+        doc, n = build_dxf(pts, TitleInfo("M", "TPV25A01", lang="en"), columns=2, terminals=False)
+        with tempfile.TemporaryDirectory() as d:
+            pdf = Path(d, "io.pdf")
+            export_pdf(doc, n, pdf)
+            io = extract_io(pdf)
+        self.assertEqual(io["X0"].desc, "READY ON")
+        self.assertEqual(io["Y6"].desc, "END OF LINEAR CLOSE")
+        self.assertEqual(io["Y6"].sheet, "E400")
 
 
 if __name__ == "__main__":
