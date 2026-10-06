@@ -63,3 +63,55 @@ Layer: `WIRE`, `SYMBOL`, `TERMINAL`, `PLC`, `TEXT`, `FRAME`. Ký hiệu là bloc
   chưa vẽ dây nguồn và dây 0V riêng của từng thiết bị.
 - Chưa vẽ: mạch động lực, cầu chì/nguồn 24V, đầu ra relay có nhiều COM riêng, sơ đồ module truyền thông.
 - Ký hiệu đơn giản hóa theo kiểu IEC. Kiểm tra lại theo tiêu chuẩn bản vẽ của công ty trước khi phát hành.
+
+---
+
+# Bảng tag chung → GX Works3 / KV STUDIO / Weintek EasyBuilder Pro
+
+Viết danh sách tag **một lần** trong Excel/CSV. Công cụ kiểm tra địa chỉ rồi xuất file import cho từng phần mềm.
+
+```bash
+python -m dienkit.tags examples/tags.csv --plc PLC_MITSU=fx5 --plc PLC_KV=kv -o tags_out
+```
+`--plc TÊN=DÒNG`: dòng PLC là `fx5` (FX5/FX3, X/Y đánh số bát phân), `iqr` hoặc `q` (X/Y hệ 16), `kv` (Keyence KV).
+`TÊN` phải trùng với tên thiết bị PLC đã khai báo trong EasyBuilder (System Parameters → Device).
+
+## Bảng tag
+| cột | ý nghĩa |
+|---|---|
+| `tag` | tên tag, chỉ dùng chữ không dấu, số và `_` (bắt buộc) |
+| `dia_chi` | `X10`, `Y0`, `M100`, `D200`, `D30.5` (bit của word), `R1015`, `MR500`, `DM100`… (bắt buộc) |
+| `kieu` | `BOOL` `INT` `UINT` `WORD` `DINT` `UDINT` `DWORD` `REAL`; để trống thì bit → BOOL, thanh ghi → INT |
+| `mo_ta` | chú thích (có dấu được) |
+| `plc` | tên PLC khi dự án có nhiều PLC; để trống thì dùng PLC đầu tiên khai báo trong `--plc` |
+| `hmi` | `x` = đưa tag sang HMI. Nếu không có cột này thì mọi tag đều sang HMI |
+| `rw` | `R` (HMI chỉ đọc) hoặc `RW` (mặc định) |
+
+## Những gì được kiểm tra (báo LỖI → không xuất file, trừ khi thêm `--force`)
+- Địa chỉ sai hệ đếm: FX5 không có `X8`/`X9`; Keyence `R016` sai vì 2 số cuối là bit 00–15.
+- Tiền tố không có ở dòng PLC đó, ví dụ `DM` trên Mitsubishi.
+- Kiểu dữ liệu không hợp với thiết bị: `M10` khai báo INT, `D200` khai báo BOOL.
+- Dữ liệu 32-bit (REAL/DINT) chồng lên tag khác, ví dụ REAL ở D100 trong khi D101 là tag khác.
+- Trùng tên tag, tên có dấu cách hoặc bắt đầu bằng số.
+- CẢNH BÁO (vẫn xuất file): hai tag cùng địa chỉ, bit nằm trong word đã khai báo, dữ liệu 32-bit đặt ở địa chỉ lẻ.
+
+Kết quả kiểm tra nằm trong `tags_out/kiem_tra_tag.xlsx` (đỏ = lỗi, vàng = cảnh báo).
+
+## File xuất ra
+| file | nhập vào |
+|---|---|
+| `<PLC>_gx3_global_label.csv` | GX Works3 → nhãn toàn cục (Global Label) |
+| `<PLC>_gx3_device_comment.csv` | GX Works3 → chú thích thiết bị (Device Comment) |
+| `<PLC>_kv_device_comment.csv` | KV STUDIO → chú thích thiết bị |
+| `weintek_address_tags.csv` | EasyBuilder Pro → Address Tag Library → Import CSV |
+
+## ⚠️ Định dạng file import — đọc trước khi dùng
+Cột, dấu phân cách và encoding của file import **thay đổi theo phiên bản và ngôn ngữ** phần mềm.
+Định dạng mặc định ở trên **chưa được thử trên phần mềm thật**. Cách chắc chắn nhất:
+1. Trong phần mềm của bạn, tạo 1–2 tag/chú thích bằng tay rồi **Export** ra CSV.
+2. Truyền file đó vào: `--template-gx3 nhan.csv`, `--template-comment chuthich.csv`, `--template-weintek hmi.csv`.
+3. Công cụ giữ nguyên dòng đầu, thứ tự cột, dấu phân cách (tab/phẩy) và encoding (UTF-8/UTF-16/Shift-JIS)
+   của file mẫu. Cột nào không nhận ra (giá trị đầu, ngôn ngữ khác…) sẽ để trống.
+   Tên cột được nhận ra bằng tiếng Anh, tiếng Nhật hoặc tiếng Việt.
+
+Tag dạng bit của word (`D30.0`): sau khi import vào EasyBuilder, kiểm tra lại cách phần mềm hiểu địa chỉ.

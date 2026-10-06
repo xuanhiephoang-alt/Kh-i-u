@@ -1,0 +1,19 @@
+plc,tag,dia_chi,kieu,mo_ta,hmi,rw
+PLC_MITSU,PB_START,X0,,Nút nhấn khởi động,x,R
+PLC_MITSU,PB_STOP,X1,,Nút nhấn dừng,x,R
+PLC_MITSU,LS_UP,X10,,Công tắc hành trình trên,,
+PLC_MITSU,KM1,Y0,,Contactor bơm 1,x,R
+PLC_MITSU,HMI_START,M100,BOOL,Nút Start trên HMI,x,RW
+PLC_MITSU,HMI_STOP,M101,BOOL,Nút Stop trên HMI,x,RW
+PLC_MITSU,STATE,D0,INT,Trạng thái máy (0=Dừng 1=Chạy),x,R
+PLC_MITSU,SP_PRESSURE,D10,REAL,Cài đặt áp suất (bar),x,RW
+PLC_MITSU,PV_PRESSURE,D12,REAL,Áp suất thực tế (bar),x,R
+PLC_MITSU,COUNT_TOTAL,D20,DINT,Tổng sản phẩm,x,R
+PLC_MITSU,ALARM_WORD,D30,WORD,Từ báo lỗi,x,R
+PLC_MITSU,ALM_OVERLOAD,D30.0,,Lỗi quá tải,x,R
+PLC_MITSU,ALM_ESTOP,D30.1,,Lỗi dừng khẩn,x,R
+PLC_KV,KV_RUN,R000,,Tín hiệu chạy từ Keyence,x,R
+PLC_KV,KV_SENSOR,R1015,,Cảm biến trạm 2,x,R
+PLC_KV,KV_SPEED,DM100,INT,Tốc độ băng tải (mm/s),x,RW
+PLC_KV,KV_LENGTH,DM200,REAL,Chiều dài cắt (mm),x,RW
+PLC_KV,KV_FLAG,MR500,,Cờ nội bộ,,
