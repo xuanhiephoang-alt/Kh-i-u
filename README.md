@@ -30,3 +30,36 @@ Cột: `ten,kw,pha,dien_ap,cosphi,hieu_suat,chieu_dai_m,kd,dong_co,so_loi` (xem 
   catalogue nhà sản xuất trước khi dùng cho hồ sơ thiết kế, hoặc truyền bảng riêng qua `ampacity`.
 - Chưa tính: dòng khởi động động cơ, ngắn mạch/độ nhạy bảo vệ, phối hợp bảo vệ, cáp XLPE/nhôm, tụ bù, máy biến áp.
 - Chỉ chọn aptomat theo dòng định mức; chưa chọn khả năng cắt (kA) và dòng chỉnh định.
+
+---
+
+# Sinh bản vẽ đấu nối I/O PLC (DXF + PDF)
+
+```bash
+python -m dienkit.iodraw examples/io_list.csv -o io.dxf --pdf io.pdf --project "Tên công trình" --drawer "Tên"
+```
+Mở `io.dxf` bằng AutoCAD / ZWCAD / LibreCAD; PDF để in hoặc gửi khách hàng. Xem mẫu: `examples/io_mau.pdf`.
+
+## Bảng I/O (CSV/Excel)
+| cột | bắt buộc | ý nghĩa |
+|---|---|---|
+| `dia_chi` | có | địa chỉ PLC: `X0`, `Y10`, `R000`, `D8000`… (không được trùng) |
+| `loai` | có | `DI` / `DO` / `AI` / `AO` |
+| `tag`, `mo_ta` | | tên tag, mô tả (có dấu được) |
+| `thiet_bi` | | chọn ký hiệu: nút nhấn/NO, NC/nút dừng/E-stop, cảm biến, đèn, rơ le/contactor, van, 4-20mA |
+| `dau_day` | | số domino; để trống thì tự đánh XT1 (DI), XT2 (AI), XT3 (DO), XT4 (AO) |
+| `module` | | tên module; đổi module sẽ sang tờ mới |
+
+Mỗi tờ A3 có tối đa 16 điểm và khung tên. Các tờ đặt cạnh nhau trong model space, cách nhau 450 mm.
+Layer: `WIRE`, `SYMBOL`, `TERMINAL`, `PLC`, `TEXT`, `FRAME`. Ký hiệu là block, nên có thể sửa một lần cho toàn bộ bản vẽ.
+
+## Chiều nguồn — chọn theo đúng model PLC
+- `--di pnp` (mặc định): thiết bị lấy +24V, chân COM/S/S nối 0V. Dùng `--di npn` khi chân S/S nối +24V.
+- `--do source` (mặc định, ví dụ FX5U-…MT/ESS): COM +24V, tải về 0V. Dùng `--do sink` cho FX5U-…MT/ES.
+- Nếu cột `thiet_bi` ghi PNP/NPN ngược với kiểu đã chọn, chương trình in CẢNH BÁO.
+
+## Giới hạn
+- Đây là sơ đồ đấu nối dạng "một dòng cho một điểm". Cảm biến 3 dây và AI 4 dây chỉ vẽ dây tín hiệu,
+  chưa vẽ dây nguồn và dây 0V riêng của từng thiết bị.
+- Chưa vẽ: mạch động lực, cầu chì/nguồn 24V, đầu ra relay có nhiều COM riêng, sơ đồ module truyền thông.
+- Ký hiệu đơn giản hóa theo kiểu IEC. Kiểm tra lại theo tiêu chuẩn bản vẽ của công ty trước khi phát hành.

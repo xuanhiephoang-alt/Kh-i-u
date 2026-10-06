@@ -1,2 +1,4 @@
 openpyxl
 pdfplumber
+ezdxf
+matplotlib

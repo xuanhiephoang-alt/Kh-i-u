@@ -1,0 +1,30 @@
+dia_chi,loai,tag,mo_ta,thiet_bi,dau_day,module
+X0,DI,PB_START,Nút nhấn khởi động,nút nhấn NO,,FX5U-32MT
+X1,DI,PB_STOP,Nút nhấn dừng,nút dừng NC,,FX5U-32MT
+X2,DI,ESTOP,Dừng khẩn cấp,E-stop NC,,FX5U-32MT
+X3,DI,SS_AUTO,Công tắc chọn Auto/Man,công tắc,,FX5U-32MT
+X4,DI,LS_UP,Công tắc hành trình trên,limit,,FX5U-32MT
+X5,DI,LS_DOWN,Công tắc hành trình dưới,limit,,FX5U-32MT
+X6,DI,PS_BOX,Cảm biến phát hiện hộp,cảm biến PNP,,FX5U-32MT
+X7,DI,OL_M1,Rơ le nhiệt bơm 1 trip,NC,,FX5U-32MT
+X10,DI,FB_KM1,Phản hồi contactor KM1,NO,,FX5U-32MT
+X11,DI,FB_KM2,Phản hồi contactor KM2,NO,,FX5U-32MT
+X12,DI,LV_HIGH,Phao mức cao,NO,,FX5U-32MT
+X13,DI,LV_LOW,Phao mức thấp,NO,,FX5U-32MT
+X14,DI,PS_CNT,Cảm biến đếm sản phẩm,cảm biến NPN,,FX5U-32MT
+X15,DI,DOOR,Cửa tủ điện,NC,,FX5U-32MT
+X16,DI,PB_RESET,Nút reset lỗi,nút nhấn,,FX5U-32MT
+X17,DI,VFD_FLT,Lỗi biến tần,NO,,FX5U-32MT
+X20,DI,PB_JOG,Nút chạy nhấp,nút nhấn,,FX5-16EX
+X21,DI,PS_JAM,Cảm biến kẹt hàng,cảm biến,,FX5-16EX
+Y0,DO,KM1,Contactor bơm 1,contactor,,FX5U-32MT
+Y1,DO,KM2,Contactor bơm 2,contactor,,FX5U-32MT
+Y2,DO,YV1,Van khí xi lanh nâng,van điện từ,,FX5U-32MT
+Y3,DO,YV2,Van khí xi lanh hạ,van,,FX5U-32MT
+Y4,DO,HL_RUN,Đèn báo chạy,đèn,,FX5U-32MT
+Y5,DO,HL_FLT,Đèn báo lỗi,đèn,,FX5U-32MT
+Y6,DO,VFD_RUN,Lệnh chạy biến tần,rơ le,,FX5U-32MT
+Y7,DO,BUZ,Còi báo,còi,,FX5U-32MT
+D8000,AI,PT101,Áp suất đường ống 0-10bar,4-20mA,,FX5-4AD
+D8001,AI,TT101,Nhiệt độ bồn,4-20mA,,FX5-4AD
+D8010,AO,SPD_VFD,Tốc độ biến tần,0-10V,,FX5-4DA
