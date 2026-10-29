@@ -206,6 +206,46 @@ class Sheet:
             out[key] = (x, y)
         return out
 
+    # ---------------------------------------------------------------- bo tri / gia cong
+    def dim(self, a, b, off, text=None, vertical=False, h=2.0):
+        """Kich thuoc giua 2 diem a, b: duong kich thuoc lech off (mm tren to) theo y (ngang) hoac x (doc).
+        text mac dinh la khoang cach - truyen gia tri that (vd '880') khi ve theo ti le."""
+        (x1, y1), (x2, y2) = a, b
+        L = "DIM"
+        if not vertical:
+            y = max(y1, y2) + off if off > 0 else min(y1, y2) + off
+            s = 1 if off > 0 else -1
+            for x, yy in ((x1, y1), (x2, y2)):
+                self.pg.line((x, yy + s * 1), (x, y + s * 1.5), L)
+            self.pg.line((x1, y), (x2, y), L)
+            for x, d in ((x1, 1), (x2, -1)):
+                self.pg.line((x, y), (x + d * 2.2, y + 0.7), L)
+                self.pg.line((x, y), (x + d * 2.2, y - 0.7), L)
+            self.text(text if text is not None else f"{abs(x2 - x1):g}", (x1 + x2) / 2, y + 0.8, h,
+                      TA.BOTTOM_CENTER, L)
+        else:
+            x = max(x1, x2) + off if off > 0 else min(x1, x2) + off
+            s = 1 if off > 0 else -1
+            for xx, y in ((x1, y1), (x2, y2)):
+                self.pg.line((xx + s * 1, y), (x + s * 1.5, y), L)
+            self.pg.line((x, y1), (x, y2), L)
+            for y, d in ((y1, 1 if y2 > y1 else -1), (y2, -1 if y2 > y1 else 1)):
+                self.pg.line((x, y), (x + 0.7, y + d * 2.2), L)
+                self.pg.line((x, y), (x - 0.7, y + d * 2.2), L)
+            self.text(text if text is not None else f"{abs(y2 - y1):g}", x - 0.8, (y1 + y2) / 2, h,
+                      TA.BOTTOM_CENTER, L, rot=90)
+
+    def hatch_rect(self, x1, y1, x2, y2, label="", h=1.8, scale=0.6):
+        """O gach cheo (mang di day, vach tu...) + chu o giua."""
+        self.rect(x1, y1, x2, y2)
+        hat = self.msp.add_hatch(color=8, dxfattribs={"layer": "SYMBOL"})
+        hat.set_pattern_fill("ANSI31", scale=scale)
+        hat.paths.add_polyline_path([self.pg.p(x1, y1), self.pg.p(x2, y1), self.pg.p(x2, y2), self.pg.p(x1, y2)],
+                                    is_closed=True)
+        if label:
+            rot = 90 if (y2 - y1) > (x2 - x1) * 1.5 else 0
+            self.text(label, (x1 + x2) / 2, (y1 + y2) / 2, h, TA.MIDDLE_CENTER, rot=rot)
+
     def table(self, x, y_top, widths, rows, h=2.0, row_h=6.5, header=True):
         """Bang: rows = [[o1, o2, ...]]; dong dau la tieu de neu header."""
         xs = [x]

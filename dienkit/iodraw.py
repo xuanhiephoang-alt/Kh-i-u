@@ -571,7 +571,8 @@ def build_dxf(points: list[IOPoint], info: TitleInfo | None = None,
 def _new_doc():
     doc = ezdxf.new("R2010", setup=True, units=4)  # 4 = mm
     doc.styles.add("VN", font="arial.ttf")
-    for name, color in [("FRAME", 7), ("WIRE", 1), ("SYMBOL", 3), ("TEXT", 7), ("TERMINAL", 5), ("PLC", 4)]:
+    for name, color in [("FRAME", 7), ("WIRE", 1), ("SYMBOL", 3), ("TEXT", 7), ("TERMINAL", 5), ("PLC", 4),
+                        ("DIM", 2)]:
         doc.layers.add(name, color=color)
     _define_blocks(doc)
     return doc

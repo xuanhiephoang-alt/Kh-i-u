@@ -48,6 +48,21 @@ class SchemTests(unittest.TestCase):
             self.assertIn(s, t)
         self.assertIn("DASHED", doc.linetypes)
 
+    def test_dim_and_hatch(self):
+        def draw(sh):
+            sh.dim((50, 100), (240, 100), 8, "760")
+            sh.dim((50, 100), (50, 275), -6, vertical=True)
+            sh.hatch_rect(50, 100, 60, 275, "W40xH60")
+
+        doc, _ = DrawingSet(EN, sheets=[("P010", "P010_PANEL", draw)]).build()
+        msp = doc.modelspace()
+        t = texts(doc)
+        self.assertIn("760", t)
+        self.assertIn("175", t)                  # mac dinh ghi khoang cach
+        rot = [e for e in msp.query("TEXT") if e.dxf.text == "W40xH60"][0]
+        self.assertEqual(rot.dxf.rotation, 90)   # o hep va cao -> chu dung
+        self.assertEqual(msp.query("HATCH").first.dxf.pattern_name, "ANSI31")
+
     def test_sig_row_not_on_bus(self):
         # tin hieu sang thiet bi khac: bus +24V chi xuong toi dong tai cuoi cung
         ds = DrawingSet(EN, io_points=[IOPoint("R500", "DO", device="van", module="M"),
