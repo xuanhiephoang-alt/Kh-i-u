@@ -46,6 +46,8 @@ SYMBOL_KEYWORDS = [
     ("SIG", ["tin hieu", "signal", "sig"]),
     ("NC", ["nc", "thuong dong", "dung", "stop", "estop", "e-stop", "khan"]),
     ("SENSOR", ["cam bien", "sensor", "pnp", "npn", "prox", "quang", "tiem can"]),
+    # coi truoc den: "Coi bao" khong duoc thanh den vi chu "bao"
+    ("BUZ", ["coi", "buzzer", "bz", "chuong"]),
     ("LAMP", ["den", "lamp", "hl", "bao"]),
     ("VALVE", ["van", "valve", "yv", "sol", "cyl", "cylinder", "vacuum", "xy lanh", "xilanh"]),
     ("COIL", ["role", "ro le", "relay", "contactor", "khoi dong tu", "km", "ka", "cuon"]),
@@ -54,7 +56,7 @@ SYMBOL_KEYWORDS = [
 ]
 # Khi doan ky hieu tu MO TA (cot thiet_bi trong), chi cho phep ky hieu hop voi loai diem:
 # "U1 CYL UP" o dau vao la cong tac tu, o dau ra moi la van.
-ALLOWED_FROM_DESC = {"DI": {"NC", "SENSOR"}, "AI": {"TX"}, "DO": {"LAMP", "VALVE", "COIL"}, "AO": {"TX"}}
+ALLOWED_FROM_DESC = {"DI": {"NC", "SENSOR"}, "AI": {"TX"}, "DO": {"BUZ", "LAMP", "VALVE", "COIL"}, "AO": {"TX"}}
 
 
 def _match_symbol(text: str, allowed=None) -> str | None:
@@ -196,6 +198,10 @@ def _define_blocks(doc) -> None:
     b = doc.blocks.new("VALVE")
     b.add_line((0, 0), (5, 0)); b.add_lwpolyline([(5, -3), (15, -3), (15, 3), (5, 3)], close=True)
     b.add_line((5, -3), (15, 3)); b.add_line((15, 0), (20, 0))
+
+    # Coi: vom ban nguyet tren day
+    b = doc.blocks.new("BUZ")
+    b.add_line((0, 0), (20, 0)); b.add_arc((10, 0), 4, 0, 180)
 
     b = doc.blocks.new("TX")
     b.add_line((0, 0), (5, 0)); b.add_circle((10, 0), 5); b.add_line((15, 0), (20, 0))
@@ -344,6 +350,17 @@ def _text_cols(pg: Page, pts: list[IOPoint], x: float, y_of) -> None:
 COL_W = 195  # bo cuc 2 cot: moi cot rong 195 mm, cot 1 bat dau x=18, cot 2 x=213
 
 
+def _fit(text: str, width: float, h: float = 2.2, hmin: float = 1.6) -> tuple[str, float]:
+    """Co chu cho vua `width` mm (uoc ~0.75*h moi ky tu); nho hon hmin thi cat bot va them '…'."""
+    text = text or ""
+    if not text or len(text) * 0.75 * h <= width:
+        return text, h
+    h2 = width / (len(text) * 0.75)
+    if h2 >= hmin:
+        return text, h2
+    return text[: max(1, int(width / (0.75 * hmin)) - 1)] + "…", hmin
+
+
 def _col_input(pg: Page, cx: float, kind: str, module: str, pts: list[IOPoint], bus: str, com: str,
                terminals: bool) -> None:
     """Cot dau vao gon: bus | thiet bi | (domino) | module | mo ta."""
@@ -368,7 +385,8 @@ def _col_input(pg: Page, cx: float, kind: str, module: str, pts: list[IOPoint], 
         pg.text(pt.address, (sym_x + 20 + (term_x if terminals else m1)) / 2, y + 0.8, 1.8,
                 TextEntityAlignment.BOTTOM_CENTER)
         pg.text(pt.address, m1 + 1.5, y, 2.2, TextEntityAlignment.MIDDLE_LEFT, "PLC")
-        pg.text(pt.desc, m2 + 3, y, 2.2, TextEntityAlignment.MIDDLE_LEFT)
+        desc, h = _fit(pt.desc, COL_W - 137)  # tu mep module den het cot
+        pg.text(desc, m2 + 3, y, h, TextEntityAlignment.MIDDLE_LEFT)
     pg.text(_com_pin(kind, module), m1 + 1.5, y_com, 2.2, TextEntityAlignment.MIDDLE_LEFT, "PLC")
     pg.line((m1, y_com), (m1 - 20, y_com))
     pg.text(com, m1 - 22, y_com, 2.2, TextEntityAlignment.MIDDLE_RIGHT)
@@ -385,7 +403,8 @@ def _col_output(pg: Page, cx: float, kind: str, module: str, pts: list[IOPoint],
     pg.line((bus_x, rows[0] + 8), (bus_x, rows[-1]))
     pg.text(bus, bus_x, rows[0] + 10, 2.2, TextEntityAlignment.BOTTOM_CENTER)
     for y, pt in zip(rows, pts):
-        pg.text(pt.desc, m1 - 2, y, 2.2, TextEntityAlignment.MIDDLE_RIGHT)
+        desc, h = _fit(pt.desc, 44)  # tu mep cot den module (cot 1 khong tran vien, cot 2 khong de thanh nguon cot 1)
+        pg.text(desc, m1 - 2, y, h, TextEntityAlignment.MIDDLE_RIGHT)
         pg.text(pt.address, m2 - 1.5, y, 2.2, TextEntityAlignment.MIDDLE_RIGHT, "PLC")
         if terminals:
             pg.line((m2, y), (term_x - 1.2, y))

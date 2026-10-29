@@ -76,6 +76,8 @@ class IODrawTests(unittest.TestCase):
         self.assertEqual(IOPoint("X50", "DI", desc="U1 INPUT1 CYL UP").symbol, "NO")  # cong tac tu, khong phai van
         self.assertEqual(IOPoint("X1", "DI", desc="EMG STOP PB").symbol, "NC")
         self.assertEqual(IOPoint("Y64", "DO", desc="TOWER LAMP RED").symbol, "LAMP")
+        self.assertEqual(IOPoint("Y67", "DO", desc="Còi báo").symbol, "BUZ")  # khong thanh den vi chu "bao"
+        self.assertEqual(IOPoint("Y67", "DO", device="còi").symbol, "BUZ")
         self.assertEqual(IOPoint("X44", "DI", desc="PRESSURE SENSOR INPUT 1").symbol, "SENSOR")
         # cot thiet_bi luon uu tien hon mo ta
         self.assertEqual(IOPoint("Y0", "DO", desc="READY LAMP", device="role").symbol, "COIL")
@@ -124,6 +126,15 @@ class IODrawTests(unittest.TestCase):
         self.assertEqual(io["X0"].desc, "READY ON")
         self.assertEqual(io["Y6"].desc, "END OF LINEAR CLOSE")
         self.assertEqual(io["Y6"].sheet, "E400")
+
+    def test_fit_long_description(self):
+        from dienkit.iodraw import _fit
+        self.assertEqual(_fit("Ngắn", 44), ("Ngắn", 2.2))
+        t, h = _fit("Chạy SDVC311-S bowl 1 (qua relay G6D-F4B)", 44)
+        self.assertLessEqual(len(t) * 0.75 * h, 44.01)
+        t, h = _fit("x" * 200, 44)
+        self.assertTrue(t.endswith("…"))
+        self.assertEqual(h, 1.6)
 
 
 if __name__ == "__main__":
