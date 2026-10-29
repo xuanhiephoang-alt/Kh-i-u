@@ -81,6 +81,7 @@ class IOPoint:
     terminal: str = ""
     module: str = ""
     designation: str = ""  # ky hieu thiet bi tren ban ve: SS2, LS1, SV0...
+    xref: str = ""         # tham chieu cheo cho tin hieu sang thiet bi khac, vd "E031-B4"
 
     @property
     def symbol(self) -> str:
@@ -118,7 +119,7 @@ def read_io(path: str | Path) -> list[IOPoint]:
             raise ValueError(f"Dong {n}: loai '{d['loai']}' khong hop le (DI/DO/AI/AO)")
         pts.append(IOPoint(d["dia_chi"], kind, d.get("tag", ""), d.get("mo_ta", ""),
                            d.get("thiet_bi", ""), d.get("dau_day", ""), d.get("module", ""),
-                           d.get("ky_hieu", "")))
+                           d.get("ky_hieu", ""), d.get("tham_chieu", "")))
     seen = set()
     for p in pts:
         if p.address in seen:
@@ -228,17 +229,17 @@ class Page:
     def line(self, a, b, layer="WIRE"):
         self.msp.add_line(self.p(*a), self.p(*b), dxfattribs={"layer": layer})
 
-    def text(self, s, x, y, h=TXT, align=TextEntityAlignment.LEFT, layer="TEXT"):
+    def text(self, s, x, y, h=TXT, align=TextEntityAlignment.LEFT, layer="TEXT", rot=0):
         if s:
-            self.msp.add_text(str(s), height=h, dxfattribs={"layer": layer, "style": "VN"}
+            self.msp.add_text(str(s), height=h, dxfattribs={"layer": layer, "style": "VN", "rotation": rot}
                               ).set_placement(self.p(x, y), align=align)
 
     def rect(self, x1, y1, x2, y2, layer):
         self.msp.add_lwpolyline([self.p(x1, y1), self.p(x2, y1), self.p(x2, y2), self.p(x1, y2)],
                                 close=True, dxfattribs={"layer": layer})
 
-    def insert(self, name, x, y, layer="SYMBOL"):
-        self.msp.add_blockref(name, self.p(x, y), dxfattribs={"layer": layer})
+    def insert(self, name, x, y, layer="SYMBOL", rot=0):
+        self.msp.add_blockref(name, self.p(x, y), dxfattribs={"layer": layer, "rotation": rot})
 
 
 @dataclass
@@ -248,12 +249,69 @@ class TitleInfo:
     designer: str = ""
     sheet_base: dict = None  # so to bat dau theo loai, vd {"DI": 300, "DO": 400}
     lang: str = "vi"         # "en": ten to kieu "E300_PLC INPUT CIRCUIT"
+    style: str = "basic"     # "laymac": khung ten co bang sua doi + APPROVER/INSPECTOR/DESIGNER/CREATOR
+    approver: str = ""
+    inspector: str = ""
+    creator: str = ""
+    company: str = ""
+    date: str = ""           # bo trong = hom nay (YYYYMMDD)
 
     def __post_init__(self):
         self.sheet_base = {"DI": 300, "AI": 500, "DO": 400, "AO": 600, **(self.sheet_base or {})}
 
 
+def zone(x: float, y: float) -> str:
+    """O luoi cua diem (x, y) tren to: hang A-F (tu tren xuong), cot 0-9 -> vd 'C4'."""
+    row = "ABCDEF"[min(5, max(0, int((282 - y) // 44.5)))]
+    return f"{row}{min(9, max(0, int((x - 15) // 39)))}"
+
+
 def _frame(pg: Page, name: str, drawing_code: str, sheet: int, total: int, info: TitleInfo) -> None:
+    if info.style == "laymac":
+        _grid(pg)
+        _title_laymac(pg, name, drawing_code, sheet, total, info)
+        return
+    _grid(pg)
+    _title_basic(pg, name, drawing_code, sheet, total, info)
+
+
+def _title_laymac(pg: Page, name: str, code: str, sheet: int, total: int, info: TitleInfo) -> None:
+    """Khung ten theo mau ban ve cong ty: bang sua doi | ten cong ty | thong tin du an/ban ve."""
+    d = info.date or f"{date.today():%Y%m%d}"
+    pg.rect(15, 15, 405, 45, "FRAME")
+    for i in range(1, 6):                                    # bang sua doi 6 dong
+        pg.line((15, 15 + 5 * i), (195, 15 + 5 * i), "FRAME")
+    for x in (21, 135, 165, 195, 228):
+        pg.line((x, 15), (x, 45), "FRAME")
+    for i in range(6):
+        pg.text(str(6 - i), 18, 17.5 + 5 * i, 1.8, TextEntityAlignment.MIDDLE_CENTER, "FRAME")
+    pg.text("REVISIONS", 13, 30, 1.8, TextEntityAlignment.MIDDLE_CENTER, "FRAME", rot=90)
+    pg.text(info.company, 211.5, 30, 3.5, TextEntityAlignment.MIDDLE_CENTER, "FRAME")
+    pg.line((228, 37.5), (405, 37.5), "FRAME")
+    pg.line((316, 15), (316, 45), "FRAME")
+    pg.text("PROJECT CODE", 229.5, 43.2, 1.6, TextEntityAlignment.MIDDLE_LEFT, "FRAME")
+    pg.text(info.code, 229.5, 39.6, 2.2, TextEntityAlignment.MIDDLE_LEFT, "FRAME")
+    pg.text("PROJECT NAME", 317.5, 43.2, 1.6, TextEntityAlignment.MIDDLE_LEFT, "FRAME")
+    pg.text(info.project, 317.5, 39.6, 2.2, TextEntityAlignment.MIDDLE_LEFT, "FRAME")
+    for i, (lab, who) in enumerate((("APPROVER", info.approver), ("INSPECTOR", info.inspector),
+                                    ("DESIGNER", info.designer), ("CREATOR", info.creator or info.designer))):
+        x = 228 + 22 * i
+        if i:
+            pg.line((x, 15), (x, 37.5), "FRAME")
+        pg.text(lab, x + 1, 35.3, 1.6, TextEntityAlignment.MIDDLE_LEFT, "FRAME")
+        pg.text(who, x + 11, 26, 2.0, TextEntityAlignment.MIDDLE_CENTER, "FRAME")
+        pg.text(d if who else "", x + 11, 18.5, 1.8, TextEntityAlignment.MIDDLE_CENTER, "FRAME")
+    pg.line((316, 26.25), (405, 26.25), "FRAME")
+    pg.line((385, 15), (385, 26.25), "FRAME")
+    pg.text("DRAWING NAME", 317.5, 35.3, 1.6, TextEntityAlignment.MIDDLE_LEFT, "FRAME")
+    pg.text(name, 317.5, 30, 2.2, TextEntityAlignment.MIDDLE_LEFT, "FRAME")
+    pg.text("DRAWING CODE", 317.5, 24.1, 1.6, TextEntityAlignment.MIDDLE_LEFT, "FRAME")
+    pg.text(code, 317.5, 18.8, 2.2, TextEntityAlignment.MIDDLE_LEFT, "FRAME")
+    pg.text("SIZE / SHEET", 386, 24.1, 1.4, TextEntityAlignment.MIDDLE_LEFT, "FRAME")
+    pg.text(f"A3   {sheet}/{total}", 395, 18.8, 2.0, TextEntityAlignment.MIDDLE_CENTER, "FRAME")
+
+
+def _grid(pg: Page) -> None:
     pg.rect(10, 10, 410, 287, "FRAME")
     pg.rect(15, 15, 405, 282, "FRAME")
     # luoi vung 0-9 / A-F tren vien (de ghi tham chieu cheo kieu E300-B4)
@@ -267,8 +325,13 @@ def _frame(pg: Page, name: str, drawing_code: str, sheet: int, total: int, info:
         y = 282 - j * 44.5
         if j:
             pg.line((10, y), (15, y), "FRAME"); pg.line((405, y), (410, y), "FRAME")
+        # hang F: chu dat tren khung ten (le trai danh cho chu REVISIONS)
+        yc = (y + 45) / 2 if ch == "F" else y - 22.25
         for x in (12.5, 407.5):
-            pg.text(ch, x, y - 22.25, 2.5, TextEntityAlignment.MIDDLE_CENTER, "FRAME")
+            pg.text(ch, x, yc, 2.5, TextEntityAlignment.MIDDLE_CENTER, "FRAME")
+
+
+def _title_basic(pg: Page, name: str, drawing_code: str, sheet: int, total: int, info: TitleInfo) -> None:
     # khung ten: goc phai duoi
     x0, y0, x1 = 215, 15, 405
     pg.rect(x0, y0, x1, 45, "FRAME")
@@ -367,12 +430,19 @@ def _col_input(pg: Page, cx: float, kind: str, module: str, pts: list[IOPoint], 
     rows = [Y_TOP - i * ROW_PITCH for i in range(len(pts))]
     y_com = rows[-1] - ROW_PITCH
     bus_x, sym_x, term_x, m1, m2 = cx + 6, cx + 30, cx + 92, cx + 112, cx + 131
-    pg.line((bus_x, rows[0] + 8), (bus_x, rows[-1]))
-    pg.text(bus, bus_x, rows[0] + 10, 2.2, TextEntityAlignment.BOTTOM_CENTER)
+    # tin hieu (SIG) noi qua COM rieng cua thiet bi kia: khong cham thanh nguon
+    tapped = [y for y, p in zip(rows, pts) if p.symbol != "SIG"]
+    if tapped:
+        pg.line((bus_x, rows[0] + 8), (bus_x, min(tapped)))
+        pg.text(bus, bus_x, rows[0] + 10, 2.2, TextEntityAlignment.BOTTOM_CENTER)
     pg.rect(m1, y_com - 6, m2, rows[0] + 7, "PLC")
     pg.text(module or "PLC", (m1 + m2) / 2, rows[0] + 9, 2.2, TextEntityAlignment.BOTTOM_CENTER)
     for y, pt in zip(rows, pts):
-        pg.line((bus_x, y), (sym_x, y))
+        if pt.symbol == "SIG":
+            if pt.xref:
+                pg.text(f"({pt.xref})", sym_x - 1, y, 1.9, TextEntityAlignment.MIDDLE_RIGHT)
+        else:
+            pg.line((bus_x, y), (sym_x, y))
         pg.insert(pt.symbol, sym_x, y)
         pg.text(pt.label, sym_x + 10, y + 5, 2.0, TextEntityAlignment.BOTTOM_CENTER)
         if terminals:
@@ -400,8 +470,10 @@ def _col_output(pg: Page, cx: float, kind: str, module: str, pts: list[IOPoint],
     m1, m2, term_x, sym_x, bus_x = cx + 50, cx + 69, cx + 98, cx + 128, cx + 178
     pg.rect(m1, y_com - 6, m2, rows[0] + 7, "PLC")
     pg.text(module or "PLC", (m1 + m2) / 2, rows[0] + 9, 2.2, TextEntityAlignment.BOTTOM_CENTER)
-    pg.line((bus_x, rows[0] + 8), (bus_x, rows[-1]))
-    pg.text(bus, bus_x, rows[0] + 10, 2.2, TextEntityAlignment.BOTTOM_CENTER)
+    tapped = [y for y, p in zip(rows, pts) if p.symbol != "SIG"]
+    if tapped:
+        pg.line((bus_x, rows[0] + 8), (bus_x, min(tapped)))
+        pg.text(bus, bus_x, rows[0] + 10, 2.2, TextEntityAlignment.BOTTOM_CENTER)
     for y, pt in zip(rows, pts):
         desc, h = _fit(pt.desc, 44)  # tu mep cot den module (cot 1 khong tran vien, cot 2 khong de thanh nguon cot 1)
         pg.text(desc, m1 - 2, y, h, TextEntityAlignment.MIDDLE_RIGHT)
@@ -417,7 +489,11 @@ def _col_output(pg: Page, cx: float, kind: str, module: str, pts: list[IOPoint],
                 TextEntityAlignment.BOTTOM_CENTER)
         pg.insert(pt.symbol, sym_x, y)
         pg.text(pt.label, sym_x + 10, y + 5, 2.0, TextEntityAlignment.BOTTOM_CENTER)
-        pg.line((sym_x + 20, y), (bus_x, y))
+        if pt.symbol == "SIG":
+            if pt.xref:
+                pg.text(f"({pt.xref})", sym_x + 21, y, 1.9, TextEntityAlignment.MIDDLE_LEFT)
+        else:
+            pg.line((sym_x + 20, y), (bus_x, y))
     pg.text(_com_pin(kind, module), m2 - 1.5, y_com, 2.2, TextEntityAlignment.MIDDLE_RIGHT, "PLC")
     pg.line((m2, y_com), (m2 + 20, y_com))
     pg.text(com, m2 + 22, y_com, 2.2, TextEntityAlignment.MIDDLE_LEFT)
@@ -460,12 +536,13 @@ def _sheet_name(info: "TitleInfo", kind: str, num: str, first: str, last: str) -
 
 
 def build_dxf(points: list[IOPoint], info: TitleInfo | None = None,
-              di_mode: str = "npn", do_mode: str = "sink", columns: int = 1, terminals: bool = True):
+              di_mode: str = "npn", do_mode: str = "sink", columns: int = 1, terminals: bool = True,
+              doc=None, start: int = 0, total: int | None = None):
     """Mac dinh sink/sink nhu FX5U-..MT/ES: dau vao S/S noi +24V (thiet bi dong 0V), tai lay +24V, COM ve 0V.
     columns=2: 2 cot x 16 diem moi to (nhu ban ve TPV25A01). terminals=False: thiet bi noi thang vao PLC."""
     info = info or TitleInfo()
-    if columns == 2:
-        return _build_2col(points, info, di_mode, do_mode, terminals)
+    if columns == 2:  # doc/start/total: ghep vao bo ban ve co san (dienkit.schem)
+        return _build_2col(points, info, di_mode, do_mode, terminals, doc, start, total)
     doc = ezdxf.new("R2010", setup=True, units=4)  # 4 = mm
     doc.styles.add("VN", font="arial.ttf")
     for name, color in [("FRAME", 7), ("WIRE", 1), ("SYMBOL", 3), ("TEXT", 7), ("TERMINAL", 5), ("PLC", 4)]:
@@ -500,18 +577,38 @@ def _new_doc():
     return doc
 
 
-def _build_2col(points, info, di_mode, do_mode, terminals):
-    doc = _new_doc()
+def sheet_numbers(pages, info: "TitleInfo") -> list[str]:
+    """So to (E300, E301, E400...) cho tung trang cua paginate_columns."""
+    seq, out = {k: 0 for k in TYPE_ORDER}, []
+    for kind, _ in pages:
+        out.append(f"E{info.sheet_base[kind] + seq[kind]}")
+        seq[kind] += 1
+    return out
+
+
+def positions_2col(points: list[IOPoint], info: "TitleInfo", terminals: bool = False) -> dict[str, str]:
+    """{dia chi: 'E300-C1'} - o luoi cua ky hieu moi diem trong bo cuc 2 cot (de ghi tham chieu cheo)."""
+    pages = paginate_columns(points, 2, ROWS_PER_PAGE, terminals)
+    out = {}
+    for num, (kind, cols) in zip(sheet_numbers(pages, info), pages):
+        for c, (_, pts) in enumerate(cols):
+            sym_x = 18 + c * COL_W + (30 if kind in ("DI", "AI") else 128)
+            for i, pt in enumerate(pts):
+                out[pt.address] = f"{num}-{zone(sym_x + 10, Y_TOP - i * ROW_PITCH)}"
+    return out
+
+
+def _build_2col(points, info, di_mode, do_mode, terminals, doc=None, start=0, total=None):
+    doc = doc or _new_doc()
     msp = doc.modelspace()
     pages = paginate_columns(points, 2, ROWS_PER_PAGE, terminals)
-    seq = {k: 0 for k in TYPE_ORDER}
+    nums = sheet_numbers(pages, info)
     for i, (kind, cols) in enumerate(pages):
-        pg = Page(msp, i)
-        num = f"E{info.sheet_base[kind] + seq[kind]}"
-        seq[kind] += 1
+        pg = Page(msp, start + i)
+        num = nums[i]
         first, last = cols[0][1][0].address, cols[-1][1][-1].address
         _frame(pg, _sheet_name(info, kind, num, first, last), f"{info.code}-{num}" if info.code else num,
-               i + 1, len(pages), info)
+               start + i + 1, total or len(pages), info)
         bus, com = _modes(kind, di_mode, do_mode)
         draw = _col_input if kind in ("DI", "AI") else _col_output
         for c, (module, pts) in enumerate(cols):
@@ -527,6 +624,10 @@ _MPL_ALIGN = {
     TextEntityAlignment.MIDDLE_LEFT: ("left", "center"),
     TextEntityAlignment.MIDDLE_RIGHT: ("right", "center"),
     TextEntityAlignment.MIDDLE_CENTER: ("center", "center"),
+    TextEntityAlignment.BOTTOM_LEFT: ("left", "bottom"),
+    TextEntityAlignment.BOTTOM_RIGHT: ("right", "bottom"),
+    TextEntityAlignment.TOP_LEFT: ("left", "top"),
+    TextEntityAlignment.TOP_CENTER: ("center", "top"),
 }
 
 
@@ -561,7 +662,8 @@ def export_pdf(doc, n_pages: int, path: str | Path) -> None:
                 ha, va = _MPL_ALIGN.get(align, ("left", "baseline"))
                 # 1 mm = 72/25.4 pt; chieu cao chu hoa ~0.72 co chu
                 ax.text(p1.x, p1.y, t.dxf.text, fontsize=t.dxf.height * 72 / 25.4 / 0.72, ha=ha, va=va,
-                        family="DejaVu Sans", color="black")
+                        family="DejaVu Sans", color="black", rotation=t.dxf.rotation,
+                        rotation_mode="anchor")
             ax.set_xlim(i * PAGE_GAP, i * PAGE_GAP + PAGE_W)
             ax.set_ylim(0, PAGE_H)
             ax.set_aspect("equal", adjustable="box")

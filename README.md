@@ -62,11 +62,36 @@ Tùy chọn bố cục:
 - `--en`: tên tờ tiếng Anh, ví dụ `E300_PLC INPUT CIRCUIT`.
 - Cột `thiet_bi` = `tín hiệu`: điểm nối sang I/O của thiết bị khác (driver, camera…), vẽ mũi tên và ghi `ky_hieu`
   (AMC1, CAM) thay vì cuộn dây.
+  Cột `tham_chieu` (tùy chọn) ghi tham chiếu chéo sang tờ của thiết bị đó, ví dụ `E031-B3`; dòng tín hiệu không
+  nối vào thanh nguồn.
 
 PDF xuất ra có chữ thật (tìm kiếm được), nên đưa ngược vào `dienkit.gx3 --ban-ve` để kiểm tra lại được.
 
 Khung tên có PROJECT CODE / PROJECT NAME / DRAWING NAME / DRAWING CODE / DESIGNER. Mã tờ đánh theo kiểu
 `TPV25A01-E300`: DI bắt đầu từ E300, DO từ E400 (đổi bằng `--so-to-di`, `--so-to-do`). Viền có lưới vùng 0–9 / A–F.
+
+## Bộ bản vẽ hoàn chỉnh (`dienkit.schem`)
+
+Ghép nhiều tờ mạch (nguồn chính, dừng khẩn, driver, PLC…) với các tờ I/O ở trên thành một bộ DXF/PDF, đánh số tờ
+và mã tờ tự động. Mỗi tờ là một hàm Python vẽ bằng các ký hiệu cơ bản của `Sheet`: dây, cáp, chấm nối, domino,
+số dây, mũi tên sang tờ khác `(E000-C7)`, aptomat/CP 2 cực, ELCB, cầu chì, đèn, bộ nguồn, cuộn relay,
+tiếp điểm NO/NC, hộp thiết bị, cột chân đấu nối, bảng.
+
+```python
+from dienkit.iodraw import TitleInfo, read_io
+from dienkit.schem import DrawingSet, export_pdf
+
+info = TitleInfo(project="MAY X", code="AB26A01", designer="HIEP.HX", lang="en", style="laymac", company="LAYMAC")
+def e000(sh):
+    sh.cp2(110, 190, 181, "CP1", "10A")
+    sh.ref_out(300, 190, "R1", "E035")
+ds = DrawingSet(info, sheets=[("E000", "E000_MAIN POWER SUPPLY CIRCUIT", e000)],
+                io_points=read_io("io.csv"), io_after="E000")
+doc, n = ds.build()
+doc.saveas("bo_ban_ve.dxf"); export_pdf(doc, n, "bo_ban_ve.pdf")
+```
+`style="laymac"`: khung tên có bảng sửa đổi, APPROVER / INSPECTOR / DESIGNER / CREATOR. Vị trí ô lưới của một
+điểm: `zone(x, y)`; vị trí từng địa chỉ trên tờ I/O: `positions_2col(points, info)` (để ghi tham chiếu chéo).
 
 Mỗi tờ A3 có tối đa 16 điểm và khung tên. Các tờ đặt cạnh nhau trong model space, cách nhau 450 mm.
 Layer: `WIRE`, `SYMBOL`, `TERMINAL`, `PLC`, `TEXT`, `FRAME`. Ký hiệu là block, nên có thể sửa một lần cho toàn bộ bản vẽ.
