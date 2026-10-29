@@ -88,7 +88,7 @@ def write_excel(path: str | Path, results: list[Result], main: dict, lines: list
                    L.length_m, round(r.vdrop_pct, 2) if r.vdrop_pct is not None else None, r.note])
     n = len(results) + 2
     ws.append([])
-    ws.append(["Tong (Ks=%.2f)" % main["ks"], round(main["kw"], 2), None, None, None, None,
+    ws.append(["Tong (Ks=%.2f, %d pha %gV)" % (main["ks"], main.get("phases", 3), main.get("voltage", 380)), round(main["kw"], 2), None, None, None, None,
                round(main["kva"], 2), round(main["i"], 1), main["breaker"]])
     ws.cell(row=n + 1, column=1).font = bold
     widths = [24, 8, 6, 8, 8, 6, 9, 9, 14, 6, 14, 9, 8, 10, 40]

@@ -122,9 +122,14 @@ def size_load(load: Load, **cable_opts) -> Result:
     return Result(load, kva, ib, in_a, poles, s, vd, iz, note)
 
 
-def size_main(results: list[Result], ks: float = 0.8, voltage: float = 380.0) -> dict:
-    """Tai tong: tong kVA x he so dong thoi Ks -> dong tong va aptomat tong."""
+def size_main(results: list[Result], ks: float = 0.8, voltage: float | None = None) -> dict:
+    """Tai tong: tong kVA x he so dong thoi Ks -> dong tong va aptomat tong.
+    Tat ca tai 1 pha -> nguon 1 pha (I = S/U, U lay theo tai, vd 220V); con lai -> 3 pha can bang (I = S/(√3·U))."""
     kva = sum(r.kva for r in results) * ks
     kw = sum(r.load.kw * r.load.kd for r in results) * ks
-    i = kva * 1000 / (math.sqrt(3) * voltage)
-    return {"kw": kw, "kva": kva, "i": i, "breaker": pick_breaker(i), "ks": ks}
+    single = bool(results) and all(r.load.phases == 1 for r in results)
+    if voltage is None:
+        voltage = max(r.load.voltage for r in results) if single else 380.0
+    i = kva * 1000 / (voltage if single else math.sqrt(3) * voltage)
+    return {"kw": kw, "kva": kva, "i": i, "breaker": pick_breaker(i), "ks": ks,
+            "phases": 1 if single else 3, "voltage": voltage}

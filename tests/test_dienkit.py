@@ -45,6 +45,12 @@ class CalcTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             design_current(Load("x", 5, pf=0))
 
+    def test_main_single_phase(self):
+        rs = [size_load(Load("a", 1.0, 1, 220, 0.9)), size_load(Load("b", 1.0, 1, 220, 0.9))]
+        m = size_main(rs, ks=1.0)
+        self.assertEqual(m["phases"], 1)
+        self.assertAlmostEqual(m["i"], 2222.2 / 220, 1)  # I = S/U, khong chia sqrt(3)
+
     def test_main(self):
         rs = [size_load(Load("a", 10, 3, 380, 0.85)), size_load(Load("b", 10, 3, 380, 0.85))]
         m = size_main(rs, ks=0.8)
