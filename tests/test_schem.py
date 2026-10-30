@@ -1,7 +1,11 @@
+import tempfile
 import unittest
+from pathlib import Path
+
+import ezdxf
 
 from dienkit.iodraw import IOPoint, TitleInfo, positions_2col, zone
-from dienkit.schem import DrawingSet
+from dienkit.schem import DrawingSet, find_cad
 
 EN = TitleInfo(project="P", code="AB01", lang="en", style="laymac", company="LAYMAC", designer="X")
 
@@ -62,6 +66,27 @@ class SchemTests(unittest.TestCase):
         rot = [e for e in msp.query("TEXT") if e.dxf.text == "W40xH60"][0]
         self.assertEqual(rot.dxf.rotation, 90)   # o hep va cao -> chu dung
         self.assertEqual(msp.query("HATCH").first.dxf.pattern_name, "ANSI31")
+
+    def test_outline_uses_cad_file_or_box(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = ezdxf.new()
+            src.modelspace().add_lwpolyline([(100, 100), (151, 100), (151, 190), (100, 190)], close=True)
+            src.modelspace().add_circle((125.5, 170), 4)
+            src.saveas(Path(d, "KV-NC32T.dxf"))
+            self.assertEqual(find_cad("kv nc32t", [d]).name, "KV-NC32T.dxf")   # bo qua hoa/thuong, dau
+            used = []
+
+            def draw(sh):
+                used.append(sh.outline("KV-NC32T", 50, 100, 0, 0, 0.25, "PLC1", [d]))
+                used.append(sh.outline("KV-NC32EXE", 70, 100, 31, 90, 0.25, "DI1", [d]))
+
+            doc, _ = DrawingSet(EN, sheets=[("P010", "P010_PANEL", draw)]).build()
+            self.assertEqual(used, [True, False])
+            blk = doc.blocks.get("CAD_KVNC32T")
+            self.assertAlmostEqual(blk.query("CIRCLE").first.dxf.center.x, 25.5)  # goc = goc trai duoi
+            ins = doc.modelspace().query("INSERT").query('*[name=="CAD_KVNC32T"]').first
+            self.assertEqual((ins.dxf.xscale, ins.dxf.insert.x), (0.25, 50))
+            self.assertIn("DI1", texts(doc))
 
     def test_sig_row_not_on_bus(self):
         # tin hieu sang thiet bi khac: bus +24V chi xuong toi dong tai cuoi cung

@@ -93,6 +93,11 @@ doc.saveas("bo_ban_ve.dxf"); export_pdf(doc, n, "bo_ban_ve.pdf")
 `style="laymac"`: khung tên có bảng sửa đổi, APPROVER / INSPECTOR / DESIGNER / CREATOR. Vị trí ô lưới của một
 điểm: `zone(x, y)`; vị trí từng địa chỉ trên tờ I/O: `positions_2col(points, info)` (để ghi tham chiếu chéo).
 
+Tờ bố trí tủ: `sh.outline(model, x, y, w, h, scale, label, cad_dirs)` chèn hình CAD mặt trước của thiết bị nếu
+có file `<model>.dxf` (đơn vị mm, chỉ hình nhìn trước) trong `cad_dirs`, không có thì vẽ ô `w × h`. Tên file không
+phân biệt hoa/thường và bỏ qua `-`, khoảng trắng: `KV-NC32T.dxf` = `kvnc32t.dxf`. Kèm `sh.dim(...)` (kích thước),
+`sh.hatch_rect(...)` (máng dây gạch chéo).
+
 Mỗi tờ A3 có tối đa 16 điểm và khung tên. Các tờ đặt cạnh nhau trong model space, cách nhau 450 mm.
 Layer: `WIRE`, `SYMBOL`, `TERMINAL`, `PLC`, `TEXT`, `FRAME`. Ký hiệu là block, nên có thể sửa một lần cho toàn bộ bản vẽ.
 

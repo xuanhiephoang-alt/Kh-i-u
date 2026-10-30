@@ -7,7 +7,9 @@ script du an tu ghep.
 from __future__ import annotations
 
 import math
+import re
 from dataclasses import dataclass, field
+from pathlib import Path
 
 from ezdxf.enums import TextEntityAlignment as TA
 
@@ -246,6 +248,24 @@ class Sheet:
             rot = 90 if (y2 - y1) > (x2 - x1) * 1.5 else 0
             self.text(label, (x1 + x2) / 2, (y1 + y2) / 2, h, TA.MIDDLE_CENTER, rot=rot)
 
+    def outline(self, model, x, y, w, h, scale=1.0, label="", cad_dirs=(), h_txt=1.8):
+        """Hinh thiet bi tren ban ve bo tri: (x, y) goc trai duoi tren to, w x h kich thuoc that (mm).
+        Neu co file CAD mat truoc <model>.dxf trong cad_dirs: chen dung hinh do (thu theo ti le scale,
+        dua goc trai duoi khung bao ve (x, y)). Khong co: ve o w x h. Tra ve True neu dung CAD."""
+        path = find_cad(model, cad_dirs)
+        if path:
+            name, (bw, bh) = cad_block(self.msp.doc, path)
+            self.msp.add_blockref(name, self.pg.p(x, y), dxfattribs={"layer": "SYMBOL", "xscale": scale,
+                                                                     "yscale": scale})
+            w, h = bw, bh
+        else:
+            self.rect(x, y, x + w * scale, y + h * scale)
+        if label:
+            cx, cy = x + w * scale / 2, y + h * scale / 2
+            narrow = w * scale < 9
+            self.text(label, cx, cy, h_txt - 0.3 if narrow else h_txt, TA.MIDDLE_CENTER, rot=90 if narrow else 0)
+        return bool(path)
+
     def table(self, x, y_top, widths, rows, h=2.0, row_h=6.5, header=True):
         """Bang: rows = [[o1, o2, ...]]; dong dau la tieu de neu header."""
         xs = [x]
@@ -265,6 +285,50 @@ class Sheet:
                     self.text(cell, (xs[j] + xs[j + 1]) / 2, y, h, TA.MIDDLE_CENTER)
                 else:
                     self.text(cell, xs[j] + 1.2, y, h, TA.MIDDLE_LEFT)
+
+
+def _cad_key(s: str) -> str:
+    return re.sub(r"[^A-Z0-9]", "", s.upper())
+
+
+def find_cad(model: str, cad_dirs) -> Path | None:
+    """Tim <model>.dxf trong cac thu muc (so ten bo qua hoa/thuong, dau '-', ' ', '.')."""
+    key = _cad_key(model)
+    for d in cad_dirs:
+        for f in sorted(Path(d).glob("*.dxf")) if Path(d).is_dir() else []:
+            if _cad_key(f.stem) == key:
+                return f
+    return None
+
+
+def cad_block(doc, path) -> tuple[str, tuple[float, float]]:
+    """Nap modelspace cua file DXF (hinh mat truoc, don vi mm) thanh block, goc = goc trai duoi khung bao.
+    Tra ve (ten block, (rong, cao)). Nap 1 lan cho moi doc."""
+    import ezdxf
+    from ezdxf import bbox
+    from ezdxf.addons import Importer
+    from ezdxf.math import Matrix44
+    cache = doc.__dict__.setdefault("_cad_cache", {})
+    path = Path(path)
+    if path in cache:
+        return cache[path]
+    src = ezdxf.readfile(path)
+    ext = bbox.extents(src.modelspace())
+    if not ext.has_data:
+        raise ValueError(f"{path}: file CAD rong")
+    name = f"CAD_{_cad_key(path.stem)}"
+    blk = doc.blocks.new(name)
+    imp = Importer(src, doc)
+    imp.import_entities(src.modelspace(), blk)
+    imp.finalize()
+    move = Matrix44.translate(-ext.extmin.x, -ext.extmin.y, 0)
+    for e in blk:
+        try:
+            e.transform(move)
+        except (NotImplementedError, AttributeError):
+            pass
+    cache[path] = (name, (ext.size.x, ext.size.y))
+    return cache[path]
 
 
 @dataclass
